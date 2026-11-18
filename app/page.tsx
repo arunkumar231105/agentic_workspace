@@ -152,7 +152,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-white/10 px-6 py-8 text-center text-sm text-muted-foreground md:px-10">
-        Made with ❤️ by RoadsideCoder
+        Outpost · Hackathon 2026 · Team: Arun Kumar &amp; Rahul Kumar
       </footer>
     </div>
   );

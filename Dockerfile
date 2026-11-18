@@ -22,9 +22,14 @@ COPY prisma.config.ts ./
 # which writes the client to lib/generated/prisma.
 # The cache mount keeps npm's download cache between builds, so a rebuild after a
 # dependency change only downloads what's new (important on a slow connection).
-# Extra retries and longer timeouts so one dropped download doesn't fail the whole install.
-RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund --prefer-offline \
-    --fetch-retries=6 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=180000 --fetch-timeout=600000
+# Unstable connection: fewer parallel downloads, longer timeouts, and the whole install retried
+# up to 5 times (already-downloaded packages stay in the cache, so each retry is faster).
+RUN --mount=type=cache,target=/root/.npm \
+    for i in 1 2 3 4 5; do \
+      npm ci --no-audit --no-fund --prefer-offline --maxsockets=4 \
+        --fetch-retries=6 --fetch-retry-mintimeout=20000 --fetch-retry-maxtimeout=180000 --fetch-timeout=600000 \
+      && exit 0; echo "npm ci attempt $i failed, retrying"; sleep 5; \
+    done; exit 1
 
 # Copy the rest of the source. In development the bind mount replaces this anyway,
 # but it keeps the image usable on its own.
