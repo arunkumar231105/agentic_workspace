@@ -1,0 +1,117 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceStatus {
+  PLANNING
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+// What an invited teammate can do in a workspace. The creator always has full access.
+enum MemberRole {
+  EDITOR
+  VIEWER
+}
+
+model User {
+  id          String   @id @default(cuid())
+  // Firebase Auth uid (Google sign-in). Rows are created on first sign-in by getCurrentUser.
+  firebaseUid String   @unique
+  email       String   @unique
+  name        String?
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdWorkspaces Workspace[]
+  memberships       WorkspaceMember[]
+  agentPrompts      AgentPrompt[]
+}
+
+model Workspace {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  creatorId   String
+  // Dashboard kanban column + order within it. position is a float so a dropped card can
+  // take the midpoint between its neighbors — only the moved card ever gets written.
+  status      WorkspaceStatus @default(PLANNING)
+  position    Float           @default(0)
+  // Public read-only link token; null means sharing is off. Resetting it kills old links.
+  shareToken  String?         @unique
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  creator      User              @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  // Teammates the creator invited by email. Access = creator or a member.
+  members      WorkspaceMember[]
+  // Every workspace is always exactly one doc + one canvas, paired — not a generic list of
+  // surfaces. Both are created alongside the workspace itself.
+  doc          Doc?
+  canvas       Canvas?
+  agentPrompts AgentPrompt[]
+
+  @@index([creatorId])
+}
+
+model WorkspaceMember {
+  id          String     @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        MemberRole @default(EDITOR)
+  createdAt   DateTime   @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId])
+}
+
+model Doc {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  // BlockNote block JSON — a readable copy for server-side features (agent, share view).
+  content     Json?
+  // Yjs document state — the real-time collaboration source of truth.
+  yjsState    Bytes?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model Canvas {
+  id          String   @id @default(cuid())
+  workspaceId String   @unique
+  // tldraw shape/store snapshot.
+  content     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+// One row per prompt a user sends to the agent. Only used to count usage; there are no limits.
+// Rows outlive their workspace (SetNull).
+model AgentPrompt {
+  id          String   @id @default(cuid())
+  userId      String
+  workspaceId String?
+  createdAt   DateTime @default(now())
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}

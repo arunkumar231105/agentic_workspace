@@ -1,0 +1,26 @@
+# Local development: runs the Next.js dev server in Docker with hot reload.
+# The database is Supabase cloud, so there is no Postgres service here.
+services:
+  app:
+    # Build the image from the Dockerfile in this folder.
+    build: .
+    # Start the dev server and listen on all interfaces so the host browser can reach it.
+    command: npm run dev -- -H 0.0.0.0
+    # Host port 3000 -> container port 3000 (open http://localhost:3000).
+    ports:
+      - "3000:3000"
+    # Load Clerk, Supabase, Gemini etc. keys from .env (copy .env.example first).
+    env_file: .env
+    environment:
+      # Windows bind mounts don't send file-change events into Linux, so poll for changes instead.
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      # Mount the project folder into the container so edits on Windows show up instantly.
+      - .:/app
+      # Anonymous volumes: keep the container's own copies instead of the host's (empty) folders.
+      - /app/node_modules
+      - /app/.next
+      # The Prisma client is generated into lib/generated/prisma during npm ci;
+      # without this, the bind mount above would hide it.
+      - /app/lib/generated
